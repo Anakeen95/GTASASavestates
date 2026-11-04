@@ -121,8 +121,9 @@ Requirements:
 Run `build.bat`. It produces 32-bit `build\savestate.dll` and `build\GTASA-Savestates.exe`, plus `.pdb` and
 `.map` files. To use them, put both next to `savestate.ini`.
 
-`build.bat` calls `vcvars32.bat` from Visual Studio Build Tools 18 at its default install path. For a different
-Visual Studio version or install folder, edit that line. See [BUILDING.md](BUILDING.md) for more details.
+`build.bat` finds the newest Visual Studio or Build Tools installation with the C++ x86 tools using `vswhere`, so
+any version and install folder works. If you run it from an x86 Developer Command Prompt, it uses that
+environment instead. See [BUILDING.md](BUILDING.md) for more details.
 
 ## Project layout
 

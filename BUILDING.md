@@ -11,8 +11,10 @@ The source code of the released `savestate.dll` and `GTASA-Savestates.exe` (GTA 
 Run `build.bat`. It produces 32-bit `build\savestate.dll` and `build\GTASA-Savestates.exe` (plus `.pdb` / `.map`).
 To use them, put both next to `savestate.ini`.
 
-`build.bat` calls `vcvars32.bat` of Visual Studio Build Tools 18 at its default path. For another Visual Studio
-version or install folder, change that line.
+`build.bat` uses `vswhere.exe` (installed with every Visual Studio and Build Tools) to find the newest installation
+that has the C++ x86 tools, and calls its `vcvars32.bat`. Any version and install folder works. If it is run from
+an x86 Developer Command Prompt, it uses that environment as is. If no installation is found, it stops with an
+error that says so.
 
 ## Files
 | File | What it does |
