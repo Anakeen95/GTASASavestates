@@ -1,0 +1,14 @@
+# Build output
+build/
+*.obj
+*.pdb
+*.ilk
+*.exp
+*.lib
+*.map
+*.dll
+*.exe
+
+# Editor
+.vs/
+.vscode/
