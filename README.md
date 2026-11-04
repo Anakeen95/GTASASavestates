@@ -1,80 +1,149 @@
-# GTA San Andreas savestates
+# GTA San Andreas Savestates
 
-Full savestates for GTA San Andreas (PC), like snapshots of a virtual machine: save anywhere, including in the
-middle of a mission or a cutscene, and jump back to that exact moment, in the same game session or after
-restarting the game. Everything comes back: the mission script and its timers, every ped and car with its AI,
-physics, traffic, wanted level, weather, the camera, the radio track and position. Ordinary save files only keep a
-summary of your progress and can't be used during missions; these can.
+Original author: **crabik**
 
-It is a separate program: **no file of the game is changed or added**. Start the game with
-`GTASA-Savestates.exe` to have savestates; start `gta_sa.exe` directly to play the untouched game.
+Savestates for GTA San Andreas (PC) that work like virtual machine snapshots. You can save anywhere, including
+in the middle of a mission or a cutscene, and jump back to that exact moment later. That can be in the same
+session or after restarting the game or the PC.
+
+A load restores everything: the mission script and its timers, every ped and car with its AI, physics, traffic,
+wanted level, weather, the camera, and the radio track and its position. The game's own save files only keep a
+summary of your progress and can't be used during missions. Savestates can.
+
+The mod doesn't change or add any file in the game folder. Start the game with `GTASA-Savestates.exe` to get
+savestates, or run `gta_sa.exe` directly to play the unmodified game.
+
+## Controls
 
 | Key | Action |
 |---|---|
-| **F5** | save a savestate to the current slot |
-| **F9** | load the current slot |
-| **F6 / F7** | previous / next slot (10 slots) |
+| **F5** | Save to the current slot |
+| **F9** | Load the current slot |
+| **F6 / F7** | Previous / next slot (10 slots) |
 
-A short message in the top-left corner confirms each action ("Savestate 1 saved (55 MB, 35 ms)"). Saving takes
-about 35 ms; loading takes about 10 ms for a savestate made in the same session and about 40 ms for one from an
-earlier session. Keys can be changed in `savestate.ini`.
+A short message in the top-left corner confirms each action, for example `Savestate 1 saved (55 MB, 35 ms)`.
+
+| Operation | Typical time |
+|---|---|
+| Save | ~35 ms |
+| Load (savestate from the current session) | ~10 ms |
+| Load (savestate from an earlier session) | ~40 ms |
+
+You can change the keys in `savestate.ini`.
 
 ## Requirements
-- `gta_sa.exe` **1.0 US** (HOODLUM or Compact) or **1.01 EU**. Other versions (1.01 US, Steam, Definitive Edition)
-  are detected and left alone; the log says so.
-- Windows 10/11.
 
-## Use
-1. Unzip the folder with `GTASA-Savestates.exe`, `savestate.dll` and `savestate.ini` anywhere you can write files
-   (e.g. `D:\GTA SA Savestates`; not under `Program Files`). It does not need to be inside the game folder.
-2. Run `GTASA-Savestates.exe`. The first time it asks where `gta_sa.exe` is and remembers it (`[Launcher] Game=` in
-   `savestate.ini`). It can also be given on the command line: `GTASA-Savestates.exe "D:\...\gta_sa.exe"`; other
-   arguments are passed on to the game.
-3. Play. `savestate.log` next to the launcher lists every save and load.
+- `gta_sa.exe` **1.0 US** (HOODLUM or Compact) or **1.01 EU**. The mod detects other versions (1.01 US, Steam,
+  Definitive Edition), leaves them alone and writes a note in the log.
+- Windows 10 or 11.
 
-Your own `d3d9.dll`, `DINPUT8.dll` and other files in the game folder work as before. The launcher starts the game
-paused, makes it load `savestate.dll` in memory before any game code runs, and lets it go; nothing is written to the
-game folder. Some antivirus programs warn about programs that start another program this way; if yours does, allow
-the launcher's folder.
+## Installation and use
 
-`savestate.dll` also works as a classic mod: renamed to `savestate.asi` in the `scripts` folder of an ASI loader
-(its ini, log and savestates are then kept in `scripts`).
+1. Put `GTASA-Savestates.exe`, `savestate.dll` and `savestate.ini` in a folder you can write to, for example
+   `D:\GTA SA Savestates`. Avoid `Program Files`. The folder doesn't need to be inside the game folder.
+2. Run `GTASA-Savestates.exe`. The first time, it asks where `gta_sa.exe` is and saves the path in
+   `savestate.ini` (`[Launcher] Game=`). You can also pass the path on the command line:
+   ```
+   GTASA-Savestates.exe "D:\Games\GTA San Andreas\gta_sa.exe"
+   ```
+   Any other arguments are passed on to the game.
+3. Play. `savestate.log`, next to the launcher, lists every save and load.
+
+Your own `d3d9.dll`, `DINPUT8.dll` and other files in the game folder keep working. The launcher starts the game
+suspended, loads `savestate.dll` into its memory before any game code runs, and then resumes it. Some antivirus
+programs flag programs that start other programs this way. If yours does, add an exception for the launcher's
+folder.
+
+### As an ASI mod
+
+`savestate.dll` also works as a classic ASI mod. Rename it to `savestate.asi` and put it in the `scripts` folder
+of an ASI loader. In that case its ini, log and savestates live in `scripts`.
+
+## Configuration
+
+All settings are in `savestate.ini`.
+
+| Section | Key | Default | Meaning |
+|---|---|---|---|
+| `[Savestate]` | `SaveKey`, `LoadKey`, `PrevSlotKey`, `NextSlotKey` | `116`, `120`, `117`, `118` | Windows virtual-key codes (F5, F9, F6, F7) |
+| | `ShowMessages` | `1` | Show save/load messages in the top-left corner |
+| | `RestartStreamedAudio` | `1` | After a load, resume the radio, cutscene soundtrack and ambience at their saved position |
+| | `Folder` | empty | Where savestate files go. Empty means a `savestates` folder next to the launcher |
+| | `ArenaMB` | `384` | Address space reserved for the game's heap. The stock game uses 30-60 MB. Raise it only if the log says `arena full` |
+| | `ArenaBase` | `0x10100000` | Address of that heap. Savestates only load at the address they were made at, so don't change it |
+| `[Launcher]` | `Game` | empty | Path to `gta_sa.exe`. Empty means the launcher asks on first run |
 
 ## Things to know
-- **Savestates are files** in the `savestates` folder next to the launcher (`slot01.sast` ... `slot10.sast`, about
-  55 MB each). They stay after the game is closed and can be loaded in a later session, also after a reboot.
-  Delete a file to empty its slot. A savestate loads with the same `gta_sa.exe` and at the same screen resolution
-  it was made at (the message says so otherwise).
-- Loading a normal save file from the menu does not delete savestates: you can load a savestate made in another
-  save file and in another mission.
-- Saving and loading are refused while the pause menu is open.
-- Sound effects that were playing at the instant of the save restart cleanly instead of resuming mid-sound; looping
-  sounds (engines, ambience) come back by themselves, and the radio or cutscene soundtrack resumes at the saved
-  position.
-- Each savestate made in the current session keeps the textures and models that were loaded when it was made, so
-  many savestates in different parts of the map use more memory.
-- The game has to be started by the launcher: savestates cannot be added to a game that is already running.
-- Other mods that keep their own state (CLEO scripts, trainers) are not rolled back by a load.
+
+- **Savestates are files.** They are stored as `slot01.sast` to `slot10.sast` (about 55 MB each) and stay after
+  the game is closed, so you can load them in a later session or after a reboot. Delete a file to empty its slot.
+- A savestate only loads with the same `gta_sa.exe` and at the same screen resolution it was made with. The
+  on-screen message tells you if they don't match.
+- Loading a normal save from the menu doesn't delete savestates. You can load a savestate made in a different
+  save file or mission.
+- Saving and loading are disabled while the pause menu is open.
+- Sound effects that were playing at the moment of the save restart from the beginning. Looping sounds (engines,
+  ambience) come back on their own, and the radio or cutscene soundtrack resumes at the saved position.
+- Each savestate made in the current session keeps the textures and models that were loaded at that moment. Many
+  savestates in different parts of the map use more memory.
+- The game must be started by the launcher. Savestates can't be added to a game that is already running.
+- State kept by other mods (CLEO scripts, trainers) is not rolled back by a load.
 
 ## How it works
-GTA SA keeps its game state in two places: the global variables in `gta_sa.exe` and the memory it allocates. The
-DLL redirects every allocation the game makes into one region it controls, at a fixed address (by replacing the
-game's `HeapAlloc` family in the import table, in memory, with its own allocator). A savestate is a copy of the
-game's global data plus the used pages of that region, taken between two frames with the streaming and audio
-threads paused, together with the game's graphics objects (texture and buffer contents, shaders, device state).
-Loading writes the memory back.
+
+GTA SA keeps its state in two places: global variables inside `gta_sa.exe` and memory it allocates at runtime.
+The DLL replaces the game's `HeapAlloc` family in the import table (in memory only) with its own allocator, so
+every allocation lands in one region at a fixed address. A savestate is a copy of the game's global data plus the
+used pages of that region, taken between two frames while the streaming and audio threads are paused. It also
+includes the game's graphics objects: texture and buffer contents, shaders and device state. Loading writes all of
+this back.
 
 Objects that live outside the game's memory are handled separately:
-- **Direct3D**: every texture, buffer and shader the game creates is tracked. Within a session they are kept alive
-  while a savestate needs them, and a load restores reference counts and the device state. A savestate from an
-  earlier session re-creates them from the file and rewrites every pointer to them in the restored memory (also
-  the textures the game keeps locked, like the number-plate font). RenderWare's shared vertex buffers and SA's
-  texture recycling are switched off so a kept object never changes its contents.
-- **DirectSound**: sound channels release their buffers before a load and start fresh after it; the streamed track
-  (radio, cutscene) is re-opened at its saved position.
-- **Windows and DirectInput** state, file and thread handles, the C runtime's per-thread and per-process data, and
-  the timer's link to the system clock stay as they are; the savestate's references to the old ones are rewired.
+
+- **Direct3D 9.** Every texture, buffer and shader the game creates is tracked. Within a session, they are kept
+  alive while a savestate needs them, and a load restores reference counts and device state. A savestate from an
+  earlier session re-creates them from the file and rewrites every pointer to them in the restored memory,
+  including textures the game keeps locked, like the number-plate font. RenderWare's shared vertex buffers and
+  SA's texture recycling are turned off so a kept object never changes its contents.
+- **DirectSound.** Sound channels release their buffers before a load and start fresh after it. The streamed
+  track (radio or cutscene) is re-opened at its saved position.
+- **Windows and DirectInput** state, file and thread handles, the C runtime's per-thread and per-process data,
+  and the timer's link to the system clock are left as they are. The savestate's references to the old ones are
+  rewired to the current ones.
+
+## Building from source
+
+Requirements:
+
+- Windows with the Microsoft C++ Build Tools (MSVC, x86 toolset, C++17).
+- No third-party libraries. Only the Windows SDK (`user32`, `kernel32`, `gdi32`, `comdlg32`, `shell32`).
+
+Run `build.bat`. It produces 32-bit `build\savestate.dll` and `build\GTASA-Savestates.exe`, plus `.pdb` and
+`.map` files. To use them, put both next to `savestate.ini`.
+
+`build.bat` calls `vcvars32.bat` from Visual Studio Build Tools 18 at its default install path. For a different
+Visual Studio version or install folder, edit that line. See [BUILDING.md](BUILDING.md) for more details.
+
+## Project layout
+
+| File | Purpose |
+|---|---|
+| `src/launcher.cpp` | `GTASA-Savestates.exe`: starts `gta_sa.exe` suspended and loads `savestate.dll` before the game's code runs |
+| `src/main.cpp` | DLL entry point, `savestate.ini`, key handling, on-screen messages |
+| `src/arena.*` | Game heap replacement: a TLSF allocator in one region at a fixed address |
+| `src/hooks.*` | Import-table hooks: heap redirection, main-loop safe point, audio thread parking |
+| `src/state.*` | Savestate files: saving and loading game memory |
+| `src/d3d.*` | Direct3D 9 objects: tracking, contents and device state |
+| `src/game.*` | Game addresses for 1.0 US and 1.01 EU |
+| `src/common.h` | Shared helpers |
+| `src/lab.*`, `src/census.*` | Automated test harness and diagnostics, disabled unless `[Lab]` keys are set in the ini |
+| `savestate.ini` | Default configuration |
+| `build.bat` | Build script |
 
 ## Credits
-- gta-reversed and plugin-sdk (GTA modding community) as references for addresses and structures.
-- Built with Claude Code (Anthropic), as an AI-assisted modding project.
+
+- **crabik**, original author of the project.
+- [gta-reversed](https://github.com/gta-reversed/gta-reversed) and
+  [plugin-sdk](https://github.com/DK22Pac/plugin-sdk) from the GTA modding community, used as references for
+  addresses and structures.
+- Built with Claude Code (Anthropic) as an AI-assisted modding project.
