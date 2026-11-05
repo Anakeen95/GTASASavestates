@@ -715,7 +715,26 @@ void ApplyStateValues(IDirect3DDevice9* d, const DevState* s, const Remap& m) {
     }
     if (auto* ds = Map<IDirect3DSurface9>(m, s->ds)) d->SetDepthStencilSurface(ds);
     for (int i = 0; i < NXF; i++) d->SetTransform(kTransforms[i], &s->xf[i]);
-    d->SetViewport(&s->vp);
+    // The viewport and scissor rect are in pixels of the saved screen: keep them inside the current render target
+    // (the game sets both again for the next frame).
+    D3DVIEWPORT9 vp = s->vp;
+    RECT scissor = s->scissor;
+    IDirect3DSurface9* rt0 = nullptr;
+    if (SUCCEEDED(d->GetRenderTarget(0, &rt0)) && rt0) {
+        D3DSURFACE_DESC sd;
+        if (SUCCEEDED(rt0->GetDesc(&sd))) {
+            if (vp.X >= sd.Width) vp.X = 0;
+            if (vp.Y >= sd.Height) vp.Y = 0;
+            if (vp.X + vp.Width > sd.Width) vp.Width = sd.Width - vp.X;
+            if (vp.Y + vp.Height > sd.Height) vp.Height = sd.Height - vp.Y;
+            if (scissor.right > (LONG)sd.Width) scissor.right = (LONG)sd.Width;
+            if (scissor.bottom > (LONG)sd.Height) scissor.bottom = (LONG)sd.Height;
+            if (scissor.left > scissor.right) scissor.left = scissor.right;
+            if (scissor.top > scissor.bottom) scissor.top = scissor.bottom;
+        }
+        rt0->Release();
+    }
+    d->SetViewport(&vp);
     d->SetMaterial(&s->mat);
     for (DWORD i = 0; i < 16; i++)
         if (s->lightOk[i]) { d->SetLight(i, &s->light[i]); d->LightEnable(i, s->lightOn[i]); }
@@ -726,7 +745,7 @@ void ApplyStateValues(IDirect3DDevice9* d, const DevState* s, const Remap& m) {
     d->SetPixelShaderConstantF(0, &s->psF[0][0], s->npsF);
     d->SetPixelShaderConstantI(0, &s->psI[0][0], 16);
     d->SetPixelShaderConstantB(0, s->psB, 16);
-    d->SetScissorRect(&s->scissor);
+    d->SetScissorRect(&scissor);
     d->SetNPatchMode(s->npatch);
     d->SetCurrentTexturePalette(s->palette);
 }

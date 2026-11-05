@@ -60,7 +60,26 @@ struct GameAddrs {
     uintptr_t rwAdapterInfo;          // _RwD3D9AdapterInformation .. end of _RwD3D9DeviceCaps (0x350 bytes)
     uintptr_t rwPresent;              // D3DPRESENT_PARAMETERS Present
     uintptr_t winMainFreeArgs;        // call _free(argv) at the end of WinMain
+
+    // Screen mode: the resolution, video mode and antialiasing of the running game are kept across a load, and what
+    // the restored memory sized for the saved screen is resized (see ScreenBeforeLoad in state.cpp). The 1.01 EU
+    // values are mapped from 1.0 and checked at the first save or load (ValidateScreen).
+    uintptr_t scene;                  // CScene Scene: RpWorld*, RwCamera* (+4)
+    uintptr_t rwCurrentMode;          // RwInt32: the RW D3D9 driver's current video mode index
+    uintptr_t rwVideoGlobals;         // RwBool _RwHasStencilBuffer, RwInt32 NumDisplayModes, RwUInt32 StencilClearValue,
+                                      // _rxD3D9DisplayMode* DisplayModes (D3DDISPLAYMODE + RwInt32 flags each)
+    uintptr_t rwMultisampling;        // RwUInt32 SelectedMultisamplingLevels; +8 SelectedMultisamplingLevelsNonMask
+    uintptr_t skelVideoMode;          // int32 gCurrentVideoMode (the skeleton's copy of the mode index)
+    uintptr_t videoModeList;          // char** gVideoModes (the menu's list of mode names)
+    uintptr_t postFxFrontBuffer;      // RwRaster* CPostEffects::pRasterFrontBuffer
+    uintptr_t heatHazeSizes;          // int32 CPostEffects::m_HeatHazeFXScanSizeX, ScanSizeY, RenderSizeX, RenderSizeY
+    uintptr_t timerPause;             // bool CTimer::m_CodePause; +1 m_UserPause
 };
+
+// CMenuManager settings fields (same in every PC version; m_bMenuActive at 0x5C and m_bMainMenuSwitch at 0xE9 anchor
+// the layout).
+constexpr uint32_t MENU_PrefsAntialiasing = 0xC8;   // int32 m_nPrefsAntialiasing, m_nDisplayAntialiasing
+constexpr uint32_t MENU_PrefsVideoMode    = 0xD4;   // int32 m_nPrefsVideoMode, m_nDisplayVideoMode
 
 // Offsets inside audio classes (same in every PC version).
 namespace audio {

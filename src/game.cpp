@@ -24,6 +24,7 @@ static const GameAddrs k10US = {
     {0x8E3FE0, 0x8B8},
     0xC97C1C, 0xC9BCE0, 0xC9C040,
     0x748EA6,
+    0xC17038, 0xC97C18, 0xC97C3C, 0x8E2430, 0x8D6220, 0xC920D0, 0xC402D8, 0xC40304, 0xB7CB48,
 };
 
 // 1.01 EU: found by masked byte-pattern matching against 1.0 (tools/xver.py) and verified by reference counts.
@@ -50,6 +51,7 @@ static const GameAddrs k101EU = {
     {0x8E6660, 0x8B8},
     0xC9A3DC, 0xC9E4A0, 0xC9E800,
     0x7497AB,
+    0xC197F8, 0xC9A3D8, 0xC9A3FC, 0x8E4AB0, 0x8D88BC, 0xC94890, 0xC42A98, 0xC42AC4, 0xB7F1C8,
 };
 
 const GameAddrs* g_game = nullptr;

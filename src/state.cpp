@@ -314,7 +314,140 @@ void AddDelayImports(std::vector<Keep>& k) {
     }
 }
 
-std::vector<Keep> KeepList(bool otherProcess) {
+// ------------------------------------------------------------------ screen mode
+// The screen belongs to the player who loads. The resolution, video mode and antialiasing of the running game are
+// kept live (KeepList), and what the restored memory sized for the saved screen is resized after the load: the scene
+// camera's rasters, the post-effect buffer and the heat haze sizes. The rest of the game reads the screen size from
+// RsGlobal and the camera every frame.
+constexpr uint32_t DISPLAY_MODE_SIZE = sizeof(D3DDISPLAYMODE) + 4;   // _rxD3D9DisplayMode: mode, RwInt32 flags
+constexpr uint32_t RW_CAM_FrameBuffer = 0x60, RW_CAM_ZBuffer = 0x64;  // RwCamera
+constexpr uint32_t RW_RAS_Width = 0x0C, RW_RAS_Height = 0x10, RW_RAS_Type = 0x20;   // RwRaster
+constexpr uint8_t RW_OBJ_Camera = 4, RAS_ZBuffer = 1, RAS_Camera = 2, RAS_CameraTexture = 5;
+constexpr int32_t rwVIDEOMODEEXCLUSIVE = 1;
+
+bool g_screenOk = false;       // savestates made at another resolution can be loaded
+bool g_msaaOk = false;         // the RW multisampling globals were found (kept live)
+bool g_skelModeOk = false;     // gCurrentVideoMode was found (kept live)
+std::string g_screenWhy = "not checked yet";
+
+uintptr_t SceneCamera() { return Mem<uintptr_t>(g_game->scene + 4); }
+int32_t& RasterW(uintptr_t r) { return Mem<int32_t>(r + RW_RAS_Width); }
+int32_t& RasterH(uintptr_t r) { return Mem<int32_t>(r + RW_RAS_Height); }
+
+bool RasterIs(uintptr_t r, uint8_t type) {
+    return r && arena::Contains((void*)r) && (Mem<uint8_t>(r + RW_RAS_Type) & 7) == type;
+}
+
+// The scene camera and its frame and z rasters, if they look like what they should be.
+bool CameraRasters(uintptr_t* fb, uintptr_t* zb) {
+    uintptr_t cam = SceneCamera();
+    if (!cam || !arena::Contains((void*)cam) || Mem<uint8_t>(cam) != RW_OBJ_Camera) return false;
+    *fb = Mem<uintptr_t>(cam + RW_CAM_FrameBuffer);
+    *zb = Mem<uintptr_t>(cam + RW_CAM_ZBuffer);
+    return RasterIs(*fb, RAS_Camera) && RasterIs(*zb, RAS_ZBuffer);
+}
+
+int32_t NextPow2(int32_t v) { int32_t p = 1; while (p < v && p < (1 << 16)) p <<= 1; return p; }
+
+// Checks the screen globals against the running game (the 1.01 EU addresses are mapped from 1.0).
+bool ValidateScreen(std::string& why) {
+    const auto& pp = Mem<D3DPRESENT_PARAMETERS>(g_game->rwPresent);
+    uintptr_t fb, zb;
+    if (!CameraRasters(&fb, &zb)) { why = "the scene camera is not where expected"; return false; }
+    int32_t n = Mem<int32_t>(g_game->rwVideoGlobals + 4), cur = Mem<int32_t>(g_game->rwCurrentMode);
+    uintptr_t modes = Mem<uintptr_t>(g_game->rwVideoGlobals + 12);
+    if (n <= 0 || n > 4096 || !modes || cur < 0 || cur >= n) { why = "the video mode globals are not where expected"; return false; }
+    const auto& m = Mem<D3DDISPLAYMODE>(modes + (size_t)cur * DISPLAY_MODE_SIZE);
+    int32_t flags = Mem<int32_t>(modes + (size_t)cur * DISPLAY_MODE_SIZE + sizeof(D3DDISPLAYMODE));
+    if (!pp.Windowed && (!(flags & rwVIDEOMODEEXCLUSIVE) || m.Width != pp.BackBufferWidth || m.Height != pp.BackBufferHeight)) {
+        why = "the current video mode does not match the device"; return false;
+    }
+    uintptr_t front = Mem<uintptr_t>(g_game->postFxFrontBuffer);
+    if (front && !RasterIs(front, RAS_CameraTexture)) { why = "the post-effect buffer is not where expected"; return false; }
+    uint32_t levels = Mem<uint32_t>(g_game->rwMultisampling);
+    g_msaaOk = pp.MultiSampleType == D3DMULTISAMPLE_NONE ? levels <= 1 : levels == (uint32_t)pp.MultiSampleType;
+    g_skelModeOk = Mem<int32_t>(g_game->skelVideoMode) == cur;
+    Log("screen: %ux%u %s, video mode %d of %d, camera %dx%d, multisampling %u (%s), gCurrentVideoMode %s",
+        pp.BackBufferWidth, pp.BackBufferHeight, pp.Windowed ? "windowed" : "fullscreen", cur, n, RasterW(fb), RasterH(fb),
+        (unsigned)pp.MultiSampleType, g_msaaOk ? "kept on load" : "globals not found, not kept",
+        g_skelModeOk ? "kept on load" : "not found, not kept");
+    return true;
+}
+
+// The live screen, taken before a load from another process (or after a device reset).
+struct ScreenLive {
+    bool active = false;
+    int32_t camW = 0, camH = 0, zW = 0, zH = 0;
+    std::vector<uint8_t> modes;        // the live DisplayModes array, when it lives in the arena (re-homed after the load)
+};
+
+ScreenLive CaptureScreen() {
+    ScreenLive s;
+    uintptr_t fb, zb;
+    if (!g_screenOk || !CameraRasters(&fb, &zb)) return s;
+    s.camW = RasterW(fb); s.camH = RasterH(fb);
+    s.zW = RasterW(zb); s.zH = RasterH(zb);
+    int32_t n = Mem<int32_t>(g_game->rwVideoGlobals + 4);
+    auto* modes = Mem<uint8_t*>(g_game->rwVideoGlobals + 12);
+    if (modes && arena::Contains(modes)) s.modes.assign(modes, modes + (size_t)n * DISPLAY_MODE_SIZE);
+    s.active = true;
+    return s;
+}
+
+struct ScreenOld { bool ok = false; int32_t camW = 0, camH = 0; };
+
+// After the memory was restored, before the kept values are put back: what the saved process had.
+ScreenOld ScreenDropSaved(const ScreenLive& s) {
+    ScreenOld old;
+    if (!s.active) return old;
+    uintptr_t fb, zb;
+    if (CameraRasters(&fb, &zb)) { old.ok = true; old.camW = RasterW(fb); old.camH = RasterH(fb); }
+    // The saved process's mode list (the live one is put back below). Freed only when it is the block it should be.
+    int32_t n = Mem<int32_t>(g_game->rwVideoGlobals + 4);
+    void* modes = Mem<void*>(g_game->rwVideoGlobals + 12);
+    if (modes && arena::Contains(modes) && n > 0 && arena::Size(modes) == (size_t)n * DISPLAY_MODE_SIZE) arena::Free(modes);
+    // The menu's list of mode names describes the saved process's modes: the menu rebuilds it from the live ones the
+    // next time it needs it (the saved list is left in the restored heap).
+    Mem<void*>(g_game->videoModeList) = nullptr;
+    return old;
+}
+
+// After the kept values are back: resize what the restored memory sized for the saved screen.
+void ScreenAfterLoad(const ScreenLive& s, const ScreenOld& old) {
+    if (!s.active) return;
+    if (!s.modes.empty()) {   // the kept DisplayModes pointer refers to the replaced heap: give it a block of its own
+        void* p = arena::Alloc(s.modes.size(), false);
+        if (p) memcpy(p, s.modes.data(), s.modes.size());
+        else Log("screen: NO MEMORY for the video mode list");
+        Mem<void*>(g_game->rwVideoGlobals + 12) = p;
+    }
+    uintptr_t fb, zb;
+    if (CameraRasters(&fb, &zb)) {
+        RasterW(fb) = s.camW; RasterH(fb) = s.camH;
+        RasterW(zb) = s.zW; RasterH(zb) = s.zH;
+    }
+    if (!old.ok || (old.camW == s.camW && old.camH == s.camH) || old.camW <= 0 || old.camH <= 0) return;
+    // Heat haze sizes are computed from the screen size only when the effect type changes.
+    auto* hz = (int32_t*)g_game->heatHazeSizes;
+    for (int i = 0; i < 4; i++)
+        hz[i] = (int32_t)((int64_t)hz[i] * (i & 1 ? s.camH : s.camW) / (i & 1 ? old.camH : old.camW));
+    // The post-effect buffer holds a copy of the screen. A larger one than needed works as it is (the effects draw it
+    // 1:1); a smaller one is dropped, and CPostEffects::Update re-creates it at the new size before the next frame is
+    // drawn (it runs unless the game is paused). The dropped one stays allocated until the next load.
+    uintptr_t front = Mem<uintptr_t>(g_game->postFxFrontBuffer);
+    const char* fx = "kept";
+    if (RasterIs(front, RAS_CameraTexture) && (RasterW(front) < NextPow2(s.camW) || RasterH(front) < NextPow2(s.camH))) {
+        if (Mem<uint8_t>(g_game->timerPause) || Mem<uint8_t>(g_game->timerPause + 1)) {
+            fx = "too small, kept (game paused): post effects cover part of the screen";
+        } else {
+            Mem<uintptr_t>(g_game->postFxFrontBuffer) = 0;
+            fx = "re-created at the next frame";
+        }
+    }
+    Log("screen: savestate made at %dx%d, loaded at %dx%d; post-effect buffer %s", old.camW, old.camH, s.camW, s.camH, fx);
+}
+
+std::vector<Keep> KeepList(bool otherProcess, bool screen) {
     std::vector<Keep> k;
     for (auto& rg : g_game->timerOsAnchors) AddKeep(k, rg.addr, rg.size);
     uintptr_t st = g_game->audioHardware + audio::HW_StreamThread;
@@ -335,6 +468,15 @@ std::vector<Keep> KeepList(bool otherProcess) {
     AddKeep(k, g_game->rwAdapterInfo, 0x350);
     AddKeep(k, g_game->rwPresent, sizeof(D3DPRESENT_PARAMETERS));
     AddDelayImports(k);
+    if (screen) {
+        AddKeep(k, g_game->rsGlobal + 4, 8);                               // RsGlobal maximumWidth, maximumHeight
+        AddKeep(k, g_game->rwCurrentMode, 4);
+        AddKeep(k, g_game->rwVideoGlobals, 16);                            // stencil, mode count and list
+        AddKeep(k, g_game->menuManager + MENU_PrefsAntialiasing, 8);
+        AddKeep(k, g_game->menuManager + MENU_PrefsVideoMode, 8);
+        if (g_msaaOk) { AddKeep(k, g_game->rwMultisampling, 4); AddKeep(k, g_game->rwMultisampling + 8, 4); }
+        if (g_skelModeOk) AddKeep(k, g_game->skelVideoMode, 4);
+    }
     return k;
 }
 
@@ -503,6 +645,10 @@ void ValidateOnce() {
     else g_crossOk = true;
     g_crossWhy = g_crossOk ? "" : why;
     Log("savestates of other sessions: %s%s", g_crossOk ? "supported" : "DISABLED: ", g_crossWhy.c_str());
+    g_screenWhy.clear();
+    g_screenOk = g_crossOk && ValidateScreen(g_screenWhy);
+    if (!g_crossOk) g_screenWhy = g_crossWhy;
+    Log("savestates made at another resolution: %s%s", g_screenOk ? "supported" : "DISABLED: ", g_screenWhy.c_str());
 }
 
 bool ReadHeader(const std::string& path, Header& h) {
@@ -703,6 +849,7 @@ bool Load(int slot, std::string& msg) {
     if (!r.Get(&h, sizeof(h)) || h.magic != MAGIC) { CloseHandle(f); msg = "savestate file is damaged"; return false; }
     if (const char* why = Incompatible(h)) { CloseHandle(f); msg = std::string("cannot use it: ") + why; return false; }
     const bool fast = s.gpu && h.session == g_session && s.gpu->generation == d3d::Generation() && !forceRecreate;
+    ScreenLive scr;
     if (!fast) {
         uint32_t bw = 0, bh = 0, bf = 0;
         BackBuffer(&bw, &bh, &bf);
@@ -711,10 +858,13 @@ bool Load(int slot, std::string& msg) {
         else if (h.arenaBase != (uint32_t)(uintptr_t)arena::Base()) why = "the game heap is at another address (ArenaBase)";
         else if (h.arenaUsedEnd > arena::Reserved()) why = "it needs a larger ArenaMB";
         if (why) { CloseHandle(f); msg = std::string("cannot use it: ") + why; return false; }
-        if (bw != h.bbWidth || bh != h.bbHeight || bf != h.bbFormat) {
+        scr = CaptureScreen();
+        if (!scr.active && (bw != h.bbWidth || bh != h.bbHeight || bf != h.bbFormat)) {
             CloseHandle(f);
             sprintf_s(b, "cannot use it: it was made at %ux%u (switch the game to that resolution)", h.bbWidth, h.bbHeight);
             msg = b;
+            Log("load slot %d: made at %ux%u, the game runs at %ux%u; other resolutions: %s", slot + 1, h.bbWidth,
+                h.bbHeight, bw, bh, g_screenOk ? "camera not found" : g_screenWhy.c_str());
             return false;
         }
     }
@@ -735,7 +885,7 @@ bool Load(int slot, std::string& msg) {
     AudioBeforeLoad();
     HeapCheck("after audio cleanup");
     const size_t livePages = (arena::UsedEnd() + PAGE - 1) / PAGE;
-    std::vector<Keep> keep = KeepList(!fast);
+    std::vector<Keep> keep = KeepList(!fast, scr.active);
     Capture(keep);
     LivePtd ptds[4];
     ThreadPtds(nullptr, ptds);
@@ -775,8 +925,10 @@ bool Load(int slot, std::string& msg) {
             void* p = Mem<void*>(g_game->ioinfo + 4 * i);
             if (p && arena::Contains(p)) arena::Free(p);
         }
+        ScreenOld oldScreen = ScreenDropSaved(scr);
         Restore(keep);
         RestoreIoInfo(io);
+        ScreenAfterLoad(scr, oldScreen);
         d3d::ApplyState(remap);
         d3d::Collect();   // the replaced game state's objects, unless another savestate of this process holds them
     }
