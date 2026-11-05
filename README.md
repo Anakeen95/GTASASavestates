@@ -147,4 +147,4 @@ environment instead. See [BUILDING.md](BUILDING.md) for more details.
 - [gta-reversed](https://github.com/gta-reversed/gta-reversed) and
   [plugin-sdk](https://github.com/DK22Pac/plugin-sdk) from the GTA modding community, used as references for
   addresses and structures.
-- Built with Claude Code (Anthropic) as an AI-assisted modding project.
+- Built with Claude Code (Anthropic) and Kiro IDE using Claude Opus 5.5 (Amazon Web Services) as an AI-assisted modding project.
